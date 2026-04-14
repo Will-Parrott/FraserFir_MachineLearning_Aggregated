@@ -1,0 +1,1029 @@
+---
+title: "Supervised Classification using NIR Spectra from Pre-symptomatic and Naive samples"
+author: "William Parrott"
+date: "2025-05-27"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*Code adapted from Dr. Anna Conrad*
+*REF: https://infometrix.com/pirouette/*
+
+# Setup
+
+```{r}
+######Creating a vector of wavelengths#########
+library(readr)
+library(readxl)
+
+#change to first file in spectra directory; col_names=FALSE if there are no column headers, default is 'TRUE'
+wavelength <- read_tsv("C:/Users/willi/Desktop/Master's Thesis Workbook/Summer 2024 Data_Wavelength/wavelengthref.txt", col_names=TRUE) 
+#Wavelength vector using column 1
+#wavelength <- a[,1] -> not in use, wavelength above generates same vector
+
+#Import data table
+df <- read.csv("C:/Users/willi/Desktop/Master's Thesis Workbook/RerunsMay25/Data/June/PhloemJune2024WL.csv")
+
+#Plot all spectra 
+library(mdatools)
+spectra = df[,4:260]
+wavelength = wavelength
+
+par(mfrow = c(1, 1))
+attr(spectra, "xaxis.name") = expression("Wavelength, nm")
+attr(spectra, "name") = "Fraser Fir Spectra"
+attr(spectra, "xaxis.values") = wavelength
+attr(spectra,"yaxis.name") = "Reflectance"
+mdaplot(spectra, type = "l", xticks = c(2550, 2341, 2043, 1854, 1697, 1564, 1353), xticklabels = c(2550, 2341, 2043, 1854, 1697, 1564, 1353))
+
+```
+
+# Outlier trimming with fda/fda.usc
+
+```{r}
+#Code from Heim et al. 2018 and Febrero-Bande and de la Fuente 2012
+library(fda)
+library(fda.usc)
+
+#data matrix for outlier ID
+dat <- as.matrix(df[,4:260]) #raw data
+
+#create list with variable names
+dat.label <- list(main="With", xlab="Wavelength, nm", ylab="Reflectance") #label names to have plot information in fdata object
+
+#specify data
+#argvals, by default, 1:m where m are the points observed in each curve
+myfdata <- fdata(dat, names=dat.label) 
+
+##run outlier detection based on depth measures 
+#based on assumption that depth and outlyingness are inverse notions, so if an outlier is in the dataset then the corresponding curve will have a significantly lower depth
+set.seed(3456) #set seed for consistent results
+out <- outliers.depth.trim(myfdata, dfunc = depth.FM, nb = 10, smo = 0.1, trim = 0.06)
+
+#view the sample rows selected as outliers
+FF.out <- out$outliers
+FF.out
+
+#remove outliers from full data set
+FF_wo.out <- df[-c(71, 72, 75, 73, 1),]
+
+#visualize data with and without outliers; not essential code
+dat.label.out <- list(main="Out", xlab="Wavelength, nm", ylab="Reflectance")
+#myfdata.out <- myfdata[-c(as.integer(out$outliers)),] #create a second fdata after outlier detection for visualization
+myfdata.out <- fdata(FF_wo.out[,4:260], names=dat.label.out)
+par(mfrow=c(1,2))
+plot(myfdata)
+plot(myfdata.out)
+```
+
+#Additional Outlier Trimming with Visual Review
+```{r}
+
+#Filter additional outliers based on visual review 
+boxplot(FF_wo.out$X2045.682649)
+boxplot(FF_wo.out$X1845.226384)
+#Remove additional outliers if necessary
+library(dplyr)
+FF_wo.out <- FF_wo.out %>% filter(FF_wo.out$X2045.682649 < 18)
+#FF_wo.out <- FF_wo.out %>% filter(FF_wo.out$X1696.074188 > 21)
+#FF_wo.out <- FF_wo.out %>% filter(X1843.743342 < 60)
+# First run- skipped the extra outliers because no extremes were present
+
+#Re-plot filtered spectra
+spectra = FF_wo.out[,4:260]
+wavelength = wavelength
+
+par(mfrow = c(1, 1))
+attr(spectra, "xaxis.name") = expression("Wavelength (nm)")
+attr(spectra, "name") = "Trimmed Fraser Fir Spectra"
+attr(spectra, "xaxis.values") = wavelength
+attr(spectra,"yaxis.name") = "Reflectance"
+mdaplot(spectra, type = "l", xticks = c(2550, 2341, 2043, 1854, 1697, 1564, 1353), xticklabels = c(2550, 2341, 2043, 1854, 1697, 1564, 1353))
+
+#transform spectra to the second derivative
+library(mdatools)
+FF_trim_2derv_x <- prep.savgol(as.matrix(FF_wo.out[,4:260]), width=15, porder=2, dorder=2)
+FF_trim_y <- FF_wo.out[,1:3]
+FF_trim_2derv <- as.data.frame(cbind(FF_trim_y, FF_trim_2derv_x))
+
+
+###Group and plot spectra by symptom type
+library(dplyr)
+
+FF_trim_2derv$Genotype <- factor(FF_trim_2derv$Genotype)
+FF_tolerant_2derv <- FF_trim_2derv %>% filter(Genotype == "X97")
+FF_intolerant_2derv<-FF_trim_2derv %>% filter(Genotype == "X121")
+FF_sorta_2derv <- FF_trim_2derv %>% filter(Genotype == "X51")
+
+#Average spectra by symptom type
+High_Resistance <- colMeans(FF_tolerant_2derv[,4:260])
+No_Resistance <- colMeans(FF_intolerant_2derv[,4:260])
+Medium_Resistance <- colMeans(FF_sorta_2derv[,4:260])
+
+##Combine average data into one data frame
+dat_2derv <- rbind(High_Resistance, No_Resistance, Medium_Resistance)
+
+spectra = dat_2derv
+wavelength = wavelength
+
+#Plot average transformed spectra 
+par(mfrow = c(1, 1))
+attr(spectra, "xaxis.name") = expression("Wavelength (nm)")
+attr(spectra, "name") = "Transformed Average High, Medium, and Not Resistant Phloem Spectra - June"
+attr(spectra, "xaxis.values") = wavelength
+attr(spectra,"yaxis.name") = "Transformed Reflectance"
+mdaplotg(spectra, type = "l", xticks =  c(2550, 2341, 2043, 1854, 1697, 1564, 1353), xticklabels = c(2550, 2341, 2043, 1854, 1697, 1564, 1353))
+```
+
+```{r}
+#####PCA######
+library(ggfortify)
+library(dplyr)
+library(ggplot2)
+
+FF_pca_2derv <- prcomp(FF_trim_2derv[,4:260])
+
+#PCA summary statistics w/o centering or scaling
+summary(FF_pca_2derv)
+FF_pca_2derv
+screeplot(FF_pca_2derv, npcs=min(10, length(FF_pca_2derv$sdev)), type=c("lines"),
+          main=deparse(substitute('Fraser Fir PCA 2nd Derivative')))
+
+#Plot pca w/o frame
+#By symptom
+autoplot(FF_pca_2derv, data=FF_trim_2derv, colour='Genotype', size=2) + theme_bw()
+
+#Plot pca w/ frame and w/o loadings
+autoplot(FF_pca_2derv, data=FF_trim_2derv, colour='Genotype', loadings=FALSE, loadings.colour='black',
+         loadings.label=FALSE, loadings.label.size=2, loadings.label.colour='black',
+         frame=TRUE, frame.type='norm') + theme_bw()
+
+
+```
+
+# Support Vector Machine
+
+```{r}
+library(caret)
+library(e1071)
+library(MLmetrics)
+
+#Used for consistency
+set.seed(3456)
+#p=0.7 -> partition data into 70% training and 30% testing
+trainIndex_transformed <- createDataPartition(FF_trim_2derv$Genotype, p =0.7, 
+                                              list = FALSE,
+                                              times = 1)
+head(trainIndex_transformed)
+
+train_2derv <- FF_trim_2derv[ trainIndex_transformed,]
+test_2derv <- FF_trim_2derv[-trainIndex_transformed,]
+
+train_y_2derv <- train_2derv[,1]
+test_y_2derv <- test_2derv[,1]
+train_x_2derv <- train_2derv[,4:260]
+test_x_2derv <- test_2derv[,4:260]
+
+dim(train_x_2derv)
+length(train_y_2derv)
+table(train_y_2derv)
+dim(test_x_2derv)
+length(test_y_2derv)
+table(test_y_2derv)
+
+dat_ff_2derv <- data.frame(x=train_x_2derv, y=as.factor(train_y_2derv))
+dat_ff_2derv.te <- data.frame(x=test_x_2derv, y=as.factor(test_y_2derv))
+
+##Determine optimal parameters
+set.seed(3456)
+ff_transform_tune.out <- e1071::tune(svm, y~., data=dat_ff_2derv, kernel = "radial", 
+                                      ranges = list(cost=c(0.01, 0.1, 1, 10, 100), gamma = 5*10^(-2:2)), scale = TRUE)
+summary(ff_transform_tune.out)
+
+##Using a radial kernel
+set.seed(3456)
+#Cross = 10-fold cross validation
+out_ff_2derv <- svm(y~., data=dat_ff_2derv, kernel = "radial", cost = 1, gamma = 0.05, cross = 10, scale = TRUE)
+summary(out_ff_2derv)
+table(out_ff_2derv$fitted, dat_ff_2derv$y)
+Accuracy(out_ff_2derv$fitted, dat_ff_2derv$y)
+
+#Predict with best model and testing data set
+ff_pred_transform.te <- predict(out_ff_2derv, newdata=dat_ff_2derv.te)
+table(ff_pred_transform.te, dat_ff_2derv.te$y)
+Accuracy(ff_pred_transform.te, dat_ff_2derv.te$y)
+
+##Using a linear kernel
+set.seed(3456)
+out_ff_2derv <- svm(y~., data=dat_ff_2derv, kernel = "linear", cost = 1, cross = 10, scale = TRUE)
+summary(out_ff_2derv)
+table(out_ff_2derv$fitted, dat_ff_2derv$y)
+Accuracy(out_ff_2derv$fitted, dat_ff_2derv$y)
+
+#Predict with best model and testing data set
+ff_pred_transform.te <- predict(out_ff_2derv, newdata=dat_ff_2derv.te)
+table(ff_pred_transform.te, dat_ff_2derv.te$y)
+Accuracy(ff_pred_transform.te, dat_ff_2derv.te$y)
+
+##Linear produces best testing results
+set.seed(3456)
+#Cross = 10-fold cross validation
+out_ff_2derv <- svm(y~., data=dat_ff_2derv, kernel = "linear", cost = 1, cross = 10, scale = TRUE)
+summary(out_ff_2derv)
+table(out_ff_2derv$fitted, dat_ff_2derv$y)
+Accuracy(out_ff_2derv$fitted, dat_ff_2derv$y)
+
+#Predict with best model and testing data set
+ff_pred_transform.te <- predict(out_ff_2derv, newdata=dat_ff_2derv.te)
+table(ff_pred_transform.te, dat_ff_2derv.te$y)
+Accuracy(ff_pred_transform.te, dat_ff_2derv.te$y)
+
+################
+###ROC Curves###
+################
+library(ROCR)
+rocplot = function(pred, truth, ...){
+  predob = prediction(pred, truth)
+  perf =  performance(predob, "tpr", "fpr")
+  plot(perf, ...)
+}
+
+fitted=attributes(predict(out_ff_2derv, dat_ff_2derv, decision.values = TRUE))$decision.values[,2]
+par(mfrow = c(1,1))
+rocplot(fitted, train_y_2derv, main = "Training Data")
+
+fitted=attributes(predict(out_ff_2derv, dat_ff_2derv.te, decision.values = TRUE)) $decision.values
+par(mfrow = c(1,1))
+rocplot(fitted, test_y_2derv, main = "SVM 2nd Derivative Testing Data")
+abline(0,1)
+
+```
+
+
+# Random Forest
+*Code modified from https://www.blopig.com/blog/2017/04/a-very-basic-introduction-to-random-forests-using-r/ & https://www.guru99.com/r-random-forest-tutorial.html*
+
+```{r}
+library(randomForest)
+library(VSURF)
+
+#Creating a control model using default parameters
+trControl <- trainControl(method = "cv",
+                          number = 10,
+                          search = "grid", 
+                          classProbs  = TRUE,
+                          savePredictions = TRUE)
+
+set.seed(1234)
+rf_default_2derv <- train(y~.,
+                          data = dat_ff_2derv,
+                          method = "rf",
+                          metric = "Accuracy",
+                          trControl = trControl)
+print(rf_default_2derv)
+
+#Determining best mtry = the optimal number of random variables to use in the model
+set.seed(1234)
+tuneGrid_transform <- expand.grid(.mtry = c(1: 10))
+
+rf_mtry_2derv <- train(y~.,
+                       data = dat_ff_2derv,
+                       method = "rf",
+                       metric = "Accuracy",
+                       tuneGrid = tuneGrid_transform,
+                       trControl = trControl,
+                       importance = TRUE,
+                       nodesize = 14,
+                       ntree = 300)
+print(rf_mtry_2derv)
+#Kappa compares the observed accuracy with the expected accuracy
+
+#Determining the optimal number of nodes
+#maxnodes: Set the maximum amount of terminal nodes in the forest
+#importance=TRUE: Whether independent variables importance in the random forest should be assessed
+store_maxnode_transform <- list()
+tuneGrid_transform <- expand.grid(.mtry = 6)
+for (maxnodes in c(20: 30)) {
+  set.seed(1234)
+  rf_maxnode_transform <- train(y~.,
+                                data = dat_ff_2derv,
+                                method = "rf",
+                                metric = "Accuracy",
+                                tuneGrid = tuneGrid_transform,
+                                trControl = trControl,
+                                importance = TRUE,
+                                nodesize = 14,
+                                maxnodes = maxnodes,
+                                ntree = 300)
+  current_iteration <- toString(maxnodes)
+  store_maxnode_transform[[current_iteration]] <- rf_maxnode_transform
+}
+results_maxnode <- resamples(store_maxnode_transform)
+summary(results_maxnode)
+
+#Determining the optimal number of trees
+store_maxtrees_transform <- list()
+for (ntree in c(250, 300, 350, 400, 450, 500, 550, 600, 800, 1000, 2000)) {
+  set.seed(5678)
+  rf_maxtrees_transform <- train(y~.,
+                                 data = dat_ff_2derv,
+                                 method = "rf",
+                                 metric = "Accuracy",
+                                 tuneGrid = tuneGrid_transform,
+                                 trControl = trControl,
+                                 importance = TRUE,
+                                 nodesize = 14,
+                                 maxnodes = 20,
+                                 ntree = ntree)
+  key <- toString(ntree)
+  store_maxtrees_transform[[key]] <- rf_maxtrees_transform
+}
+results_tree_transform <- resamples(store_maxtrees_transform)
+summary(results_tree_transform)
+
+##Train optimal model
+FF_rf_transform <- train(y~.,
+                          data = dat_ff_2derv,
+                          method = "rf",
+                          metric = "Accuracy",
+                          tuneGrid = tuneGrid_transform,
+                          trControl = trControl,
+                          importance = TRUE,
+                          nodesize = 14,
+                          ntree = 800,
+                          maxnodes = 20)
+
+prediction_2derv<-predict(FF_rf_transform, dat_ff_2derv.te)
+confusionMatrix(prediction_2derv, dat_ff_2derv.te$y)
+
+#Test training model
+rf_classifier_2derv = randomForest(y~., data = dat_ff_2derv, ntree=800, mtry = 6, importance = TRUE)
+rf_classifier_2derv
+
+#Test Testing model
+rf_classifier_2derv = randomForest(y~., data = dat_ff_2derv.te, ntree=800, mtry = 6, importance = TRUE)
+rf_classifier_2derv
+
+##ROC Curves##
+library(pROC)
+
+result.predicted.prob <- predict(FF_rf_transform, dat_ff_2derv.te, type  =  "prob")
+result.roc <- roc(dat_ff_2derv.te$y, result.predicted.prob$X51)
+
+plot(tpr ~ fpr,
+     coords(result.roc, "all", ret =c("tpr", "fpr"), transpose = FALSE),
+     type="l",
+     main=("Random Forest 2nd Derivative Testing Data"),
+     xlab =  "False positive rate",
+     ylab =  "True positive rate")
+abline(0,1)
+
+#Filter variables of importance
+varImp(FF_rf_transform)
+
+
+```
+
+# Variable Reduction - VarImp
+
+```{r}
+#SVM
+#Used for consistency
+set.seed(3456)
+#p=0.7 -> partition by 70%
+trainIndex_transformed <- createDataPartition(FF_trim_2derv$Genotype, p =0.7, 
+                                              list = FALSE,
+                                              times = 1)
+head(trainIndex_transformed)
+
+train_2derv <- FF_trim_2derv[ trainIndex_transformed,]
+test_2derv <- FF_trim_2derv[-trainIndex_transformed,]
+
+train_y_2derv <- train_2derv[,1]
+test_y_2derv <- test_2derv[,1]
+train_x_2derv <- train_2derv[c(60, 61,57,56,24,59,26,233,25,58,74,23,27,55,77,19,82,20,254,62)]
+test_x_2derv <- test_2derv[c(60, 61,57,56,24,59,26,233,25,58,74,23,27,55,77,19,82,20,254,62)]
+
+dim(train_x_2derv)
+length(train_y_2derv)
+table(train_y_2derv)
+dim(test_x_2derv)
+length(test_y_2derv)
+table(test_y_2derv)
+
+
+dat_2derv <- data.frame(x=train_x_2derv, y=as.factor(train_y_2derv))
+dat_2derv.te <- data.frame(x=test_x_2derv, y=as.factor(test_y_2derv))
+
+set.seed(3456)
+FF_transform_tune.out <- e1071::tune(svm, y~., data=dat_2derv, kernel = "radial", 
+                                      ranges = list(cost=c(0.01, 0.1, 1, 10, 100), gamma = 5*10^(-2:2)), scale = TRUE)
+summary(FF_transform_tune.out)
+
+#Radial Kernel
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "radial", cost = 1, gamma = 0.05, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#Linear Kernel
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "linear", cost = 1, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#Use Radial Kernel for optimal model
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "radial", cost = 1, gamma = 0.05, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#ROC Curves
+#ROC for training data
+fitted=attributes(predict(out_2derv, dat_2derv, decision.values = TRUE)) $decision.values
+par(mfrow = c(1,1))
+rocplot(fitted, train_y_2derv, main = "Training Data")
+
+#ROC for testing data
+fitted=attributes(predict(out_2derv, dat_2derv.te, decision.values = TRUE)) $decision.values
+par(mfrow = c(1,1))
+rocplot(fitted, test_y_2derv, main = "SVM VarImp Testing Data")
+abline(0,1)
+
+```
+
+
+# Variable Reduction - VSURF
+
+```{r}
+#Used for consistency
+set.seed(3456)
+#p=0.7 -> partition data into 70% training and 30% testing
+trainIndex_transformed <- createDataPartition(FF_trim_2derv$Genotype, p =0.7, 
+                                              list = FALSE,
+                                              times = 1)
+head(trainIndex_transformed)
+
+train_2derv <- FF_trim_2derv[ trainIndex_transformed,]
+test_2derv <- FF_trim_2derv[-trainIndex_transformed,]
+
+train_y_2derv <- train_2derv[,1]
+train_x_2derv <- train_2derv[,4:260]
+
+
+set.seed(1234)
+ff_vsurf <- VSURF(x = train_x_2derv, y = train_y_2derv, mtry = 6)
+summary(ff_vsurf)
+plot(ff_vsurf)
+#Interpretation variables
+ff_vsurf$varselect.interp
+#Prediction variables
+ff_vsurf$varselect.pred
+```
+
+#Random Forest using Interpretation Variables
+```{r}
+set.seed(3456)
+trainIndex_transformed <- createDataPartition(FF_trim_2derv$Genotype, p =0.7, 
+                                              list = FALSE,
+                                              times = 1)
+head(trainIndex_transformed)
+
+train_2derv <- FF_trim_2derv[ trainIndex_transformed,]
+test_2derv <- FF_trim_2derv[-trainIndex_transformed,]
+
+train_y_2derv <- train_2derv[,1]
+test_y_2derv <- test_2derv[,1]
+train_x_2derv <- train_2derv[c(60, 61, 59, 24, 62, 23, 57, 58, 25, 77, 56, 26, 76, 78, 27, 63, 22, 55, 75, 79, 19)]
+test_x_2derv <- test_2derv[c(60, 61, 59, 24, 62, 23, 57, 58, 25, 77, 56, 26, 76, 78, 27, 63, 22, 55, 75, 79, 19)]
+
+dim(train_x_2derv)
+length(train_y_2derv)
+table(train_y_2derv)
+dim(test_x_2derv)
+length(test_y_2derv)
+table(test_y_2derv)
+
+dat_2derv <- data.frame(x=train_x_2derv, y=as.factor(train_y_2derv))
+dat_2derv.te <- data.frame(x=test_x_2derv, y=as.factor(test_y_2derv))
+
+#Using default parameters
+trControl <- trainControl(method = "cv",
+                          number = 10,
+                          search = "grid", 
+                          classProbs  = TRUE,
+                          savePredictions = TRUE)
+
+set.seed(1234)
+rf_default_2derv <- train(y~.,
+                          data = dat_2derv,
+                          method = "rf",
+                          metric = "Accuracy",
+                          trControl = trControl)
+print(rf_default_2derv)
+
+#Determining best mtry = the optimal number of random variables to use in the model
+set.seed(1234)
+tuneGrid_transform <- expand.grid(.mtry = c(1: 10))
+rf_mtry_2derv <- train(y~.,
+                       data = dat_ff_2derv,
+                       method = "rf",
+                       metric = "Accuracy",
+                       tuneGrid = tuneGrid_transform,
+                       trControl = trControl,
+                       importance = TRUE,
+                       nodesize = 14,
+                       ntree = 300)
+print(rf_mtry_2derv)
+
+#Determining the optimal number of nodes
+#maxnodes: Set the maximum amount of terminal nodes in the forest
+#importance=TRUE: Whether independent variables importance in the random forest should be assessed
+store_maxnode_transform <- list()
+tuneGrid_transform <- expand.grid(.mtry = 6)
+for (maxnodes in c(20: 30)) {
+  set.seed(1234)
+  rf_maxnode_transform <- train(y~.,
+                                data = dat_ff_2derv,
+                                method = "rf",
+                                metric = "Accuracy",
+                                tuneGrid = tuneGrid_transform,
+                                trControl = trControl,
+                                importance = TRUE,
+                                nodesize = 14,
+                                maxnodes = maxnodes,
+                                ntree = 300)
+  current_iteration <- toString(maxnodes)
+  store_maxnode_transform[[current_iteration]] <- rf_maxnode_transform
+}
+results_maxnode <- resamples(store_maxnode_transform)
+summary(results_maxnode)
+
+#Determining the optimal number of trees
+store_maxtrees_transform <- list()
+for (ntree in c(250, 300, 350, 400, 450, 500, 550, 600, 800, 1000, 2000)) {
+  set.seed(5678)
+  rf_maxtrees_transform <- train(y~.,
+                                 data = dat_ff_2derv,
+                                 method = "rf",
+                                 metric = "Accuracy",
+                                 tuneGrid = tuneGrid_transform,
+                                 trControl = trControl,
+                                 importance = TRUE,
+                                 nodesize = 14,
+                                 maxnodes = 20,
+                                 ntree = ntree)
+  key <- toString(ntree)
+  store_maxtrees_transform[[key]] <- rf_maxtrees_transform
+}
+results_tree_transform <- resamples(store_maxtrees_transform)
+summary(results_tree_transform)
+
+##Train optimal model
+ff_rf_2derv <- train(y~.,
+                      data = dat_2derv,
+                      method = "rf",
+                      metric = "Accuracy",
+                      tuneGrid = tuneGrid_transform,
+                      trControl = trControl,
+                      importance = TRUE,
+                      nodesize = 20,
+                      ntree = 800,
+                      maxnodes = 20)
+
+prediction_2derv<-predict(ff_rf_2derv, dat_2derv.te)
+confusionMatrix(prediction_2derv, dat_2derv.te$y)
+
+#Test training model
+rf_classifier_2derv = randomForest(y~., data = dat_ff_2derv, ntree=800, mtry = 6, importance = TRUE)
+rf_classifier_2derv
+
+#Test Testing model
+rf_classifier_2derv = randomForest(y~., data = dat_ff_2derv.te, ntree=800, mtry = 6, importance = TRUE)
+rf_classifier_2derv
+
+
+#ROC Curves
+result.predicted.prob <- predict(ff_rf_2derv, dat_2derv.te, type  =  "prob")
+result.roc <- roc(dat_2derv.te$y, result.predicted.prob$x97)
+
+plot(tpr ~ fpr,
+     coords(result.roc, "all", ret =c("tpr", "fpr"), transpose = FALSE),
+     type="l",
+     main=("Rand. Forest VSURF-Interp. Testing Data"),
+     xlab =  "False positive rate",
+     ylab =  "True positive rate")
+abline(0,1)
+```
+
+#Random Forest using Prediction Variables
+```{r}
+set.seed(3456)
+trainIndex_transformed <- createDataPartition(FF_trim_2derv$Genotype, p =0.7, 
+                                              list = FALSE,
+                                              times = 1)
+head(trainIndex_transformed)
+
+train_2derv <- FF_trim_2derv[ trainIndex_transformed,]
+test_2derv <- FF_trim_2derv[-trainIndex_transformed,]
+
+train_y_2derv <- train_2derv[,1]
+test_y_2derv <- test_2derv[,1]
+train_x_2derv <- train_2derv[c(60, 59, 24, 77, 26, 27, 55, 75)]
+test_x_2derv <- test_2derv[c(60, 59, 24, 77, 26, 27, 55, 75)]
+
+dim(train_x_2derv)
+length(train_y_2derv)
+table(train_y_2derv)
+dim(test_x_2derv)
+length(test_y_2derv)
+table(test_y_2derv)
+
+dat_2derv <- data.frame(x=train_x_2derv, y=as.factor(train_y_2derv))
+dat_2derv.te <- data.frame(x=test_x_2derv, y=as.factor(test_y_2derv))
+
+
+#Using default parameters
+trControl <- trainControl(method = "cv",
+                          number = 10,
+                          search = "grid", 
+                          classProbs  = TRUE,
+                          savePredictions = TRUE)
+
+set.seed(1234)
+rf_default_2derv <- train(y~.,
+                          data = dat_2derv,
+                          method = "rf",
+                          metric = "Accuracy",
+                          trControl = trControl)
+print(rf_default_2derv)
+
+#Determining best mtry = the optimal number of random variables to use in the model
+set.seed(1234)
+tuneGrid_transform <- expand.grid(.mtry = c(1: 10))
+rf_mtry_2derv <- train(y~.,
+                       data = dat_ff_2derv,
+                       method = "rf",
+                       metric = "Accuracy",
+                       tuneGrid = tuneGrid_transform,
+                       trControl = trControl,
+                       importance = TRUE,
+                       nodesize = 14,
+                       ntree = 300)
+print(rf_mtry_2derv)
+
+#Determining the optimal number of nodes
+#maxnodes: Set the maximum amount of terminal nodes in the forest
+#importance=TRUE: Whether independent variables importance in the random forest should be assessed
+store_maxnode_transform <- list()
+tuneGrid_transform <- expand.grid(.mtry = 6)
+for (maxnodes in c(20: 30)) {
+  set.seed(1234)
+  rf_maxnode_transform <- train(y~.,
+                                data = dat_ff_2derv,
+                                method = "rf",
+                                metric = "Accuracy",
+                                tuneGrid = tuneGrid_transform,
+                                trControl = trControl,
+                                importance = TRUE,
+                                nodesize = 14,
+                                maxnodes = maxnodes,
+                                ntree = 300)
+  current_iteration <- toString(maxnodes)
+  store_maxnode_transform[[current_iteration]] <- rf_maxnode_transform
+}
+results_maxnode <- resamples(store_maxnode_transform)
+summary(results_maxnode)
+
+#Determining the optimal number of trees
+store_maxtrees_transform <- list()
+for (ntree in c(250, 300, 350, 400, 450, 500, 550, 600, 800, 1000, 2000)) {
+  set.seed(5678)
+  rf_maxtrees_transform <- train(y~.,
+                                 data = dat_ff_2derv,
+                                 method = "rf",
+                                 metric = "Accuracy",
+                                 tuneGrid = tuneGrid_transform,
+                                 trControl = trControl,
+                                 importance = TRUE,
+                                 nodesize = 14,
+                                 maxnodes = 20,
+                                 ntree = ntree)
+  key <- toString(ntree)
+  store_maxtrees_transform[[key]] <- rf_maxtrees_transform
+}
+results_tree_transform <- resamples(store_maxtrees_transform)
+summary(results_tree_transform)
+
+
+##Train optimal model
+ff_rf_2derv <- train(y~.,
+                      data = dat_2derv,
+                      method = "rf",
+                      metric = "Accuracy",
+                      tuneGrid = tuneGrid_transform,
+                      trControl = trControl,
+                      importance = TRUE,
+                      nodesize = 20,
+                      ntree = 800,
+                      maxnodes = 20)
+
+prediction_2derv<-predict(ff_rf_2derv, dat_2derv.te)
+confusionMatrix(prediction_2derv, dat_2derv.te$y)
+
+#Test training model
+rf_classifier_2derv = randomForest(y~., data = dat_ff_2derv, ntree=800, mtry = 6, importance = TRUE)
+rf_classifier_2derv
+
+#Test Testing model
+rf_classifier_2derv = randomForest(y~., data = dat_ff_2derv.te, ntree=800, mtry = 6, importance = TRUE)
+rf_classifier_2derv
+
+#ROC Curves
+result.predicted.prob <- predict(ff_rf_2derv, dat_2derv.te, type  =  "prob")
+result.roc <- roc(dat_2derv.te$y, result.predicted.prob$presymptomatic)
+
+plot(tpr ~ fpr,
+     coords(result.roc, "all", ret =c("tpr", "fpr"), transpose = FALSE),
+     type="l",
+     main=("Rand. Forest VSURF-Pred. Testing Data"),
+     xlab =  "False positive rate",
+     ylab =  "True positive rate")
+abline(0,1)
+```
+
+#Vsurf - Prediction variables
+
+```{r}
+##SVM
+
+set.seed(3456)
+FF_transform_tune.out <- e1071::tune(svm, y~., data=dat_2derv, kernel = "radial", 
+                                      ranges = list(cost=c(0.01, 0.1, 1, 10, 100), gamma = 5*10^(-2:2)), scale = TRUE)
+summary(FF_transform_tune.out)
+
+#Radial Kernel
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "radial", cost =1, gamma = 0.5, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#Linear Kernel
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "linear", cost =1, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#Use Linear Kernel produces best accuracy
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "radial", cost =1, gamma=0.5, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+
+#ROC Curves
+fitted=attributes(predict(out_2derv, dat_2derv, decision.values = TRUE)) $decision.values
+par(mfrow = c(1,1))
+rocplot(fitted, train_y_2derv, main = "Training Data")
+
+fitted=attributes(predict(out_2derv, dat_2derv.te, decision.values = TRUE)) $decision.values
+par(mfrow = c(1,1))
+rocplot(fitted, test_y_2derv, main = "SVM VSURF Testing Data")
+abline(0,1)
+
+```
+
+# Spectral Resampling
+
+```{r}
+library("prospectr")
+wav <- FF_trim_2derv[,4:260]
+#Reduce spectra by every 5th wavelength
+X.bin<- binning(wav, bin.size = 5)
+X.bin
+
+#SVM
+set.seed(3456)
+#p=0.7 -> partition by 70%
+trainIndex_transformed <- createDataPartition(FF_trim_2derv$Genotype, p =0.7, 
+                                              list = FALSE,
+                                              times = 1)
+head(trainIndex_transformed)
+
+train_2derv <- FF_trim_2derv[ trainIndex_transformed,]
+test_2derv <- FF_trim_2derv[-trainIndex_transformed,]
+
+train_y_2derv <- train_2derv[,1]
+test_y_2derv <- test_2derv[,1]
+train_x_2derv <- train_2derv[c(6,11, 16,21, 26, 31, 36, 41, 46, 51, 56,61, 66, 71, 76, 81, 86, 91, 96, 101, 106,111, 116,121, 126,131, 136,141, 146,151, 156,161, 166,	171, 176,181, 186,191, 196,201, 206,211, 216,221, 226,231, 236,241, 246,251, 256,260)]
+test_x_2derv <- test_2derv[c(6,11, 16,21, 26, 31, 36, 41, 46, 51, 56,61, 66, 71, 76, 81, 86, 91, 96, 101, 106,111, 116,121, 126,131, 136,141, 146,151, 156,161, 166,	171, 176,181, 186,191, 196,201, 206,211, 216,221, 226,231, 236,241, 246,251, 256,260)]
+
+dim(train_x_2derv)
+length(train_y_2derv)
+table(train_y_2derv)
+dim(test_x_2derv)
+length(test_y_2derv)
+table(test_y_2derv)
+
+dat_2derv <- data.frame(x=train_x_2derv, y=as.factor(train_y_2derv))
+dat_2derv.te <- data.frame(x=test_x_2derv, y=as.factor(test_y_2derv))
+
+set.seed(3456)
+FF_transform_tune.out <- e1071::tune(svm, y~., data=dat_2derv, kernel = "radial", 
+                                      ranges = list(cost=c(0.01, 0.1, 1, 10, 100), gamma = 5*10^(-2:2)), scale = TRUE)
+summary(FF_transform_tune.out)
+
+#Radial Kernel
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "radial", cost =10, gamma = 0.05, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#Linear Kernel
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "linear", cost = 10,  cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#Radial Kernel
+set.seed(3456)
+#Cross means removing parts of the data and running it 10 times
+out_2derv <- svm(y~., data=dat_2derv, kernel = "linear", cost =10, cross = 10, scale = TRUE)
+summary(out_2derv)
+table(out_2derv$fitted, dat_2derv$y)
+Accuracy(out_2derv$fitted, dat_2derv$y)
+
+#Predict with best model and testing data set
+FF_pred_2derv.te <- predict(out_2derv, newdata=dat_2derv.te)
+table(FF_pred_2derv.te, dat_2derv.te$y)
+Accuracy(FF_pred_2derv.te, dat_2derv.te$y)
+
+#ROC Curves
+fitted=attributes(predict(out_2derv, dat_2derv, decision.values = TRUE)) $decision.values
+par(mfrow = c(1,1))
+rocplot(fitted, train_y_2derv, main = "Training Data")
+
+fitted=attributes(predict(out_2derv, dat_2derv.te, decision.values = TRUE)) $decision.values
+par(mfrow = c(1,1))
+rocplot(fitted, test_y_2derv, main = "SVM Binning Testing Data")
+abline(0,1)
+```
+
+# Sparse Partial least squares discriminate analysis
+
+
+```{r}
+library("mixOmics")
+
+set.seed(3456)
+#p=0.7 -> partition by 70%
+trainIndex_transformed <- createDataPartition(FF_trim_2derv$Genotype, p =0.7, 
+                                              list = FALSE,
+                                              times = 1)
+head(trainIndex_transformed)
+
+train_2derv <- FF_trim_2derv[ trainIndex_transformed,]
+test_2derv <- FF_trim_2derv[-trainIndex_transformed,]
+
+train_y_2derv <- train_2derv[,1]
+test_y_2derv <- test_2derv[,1]
+train_x_2derv <- train_2derv[,4:260]
+test_x_2derv <- test_2derv[,4:260]
+
+dim(train_x_2derv)
+length(train_y_2derv)
+table(train_y_2derv)
+dim(test_x_2derv)
+length(test_y_2derv)
+table(test_y_2derv)
+
+dat_2derv <- data.frame(x=train_x_2derv, y=as.factor(train_y_2derv))
+
+#Using default parameters
+results_2derv <- mixOmics::plsda(train_x_2derv, train_y_2derv, ncomp = 10)
+#Shows the relationship and similarities between samples
+plotIndiv(results_2derv)
+#plots the correlations between each variable and the selected components
+plotVar(results_2derv)
+
+#Tuning the best model
+set.seed(30)
+train.plsda_2derv <- perf(results_2derv, validation = "Mfold", folds = 5, 
+                          progressBar = FALSE, nrepeat = 50)
+
+#Plot components x error rate 
+plot(train.plsda_2derv, col = color.mixo(5:7), sd = TRUE,
+     legend.position = "horizontal")
+
+list.keepX <- c(5:10, seq(20, 100, 10))
+set.seed(30)
+tune.splsda.srbct <- tune.splsda(train_x_2derv, train_y_2derv, ncomp = 5,
+                                 validation = 'Mfold',
+                                 folds = 5, dist = 'max.dist', progressBar = FALSE,
+                                 measure = "BER", test.keepX = list.keepX,
+                                 nrepeat = 50)
+
+error <- tune.splsda.srbct$error.rate
+error
+#Number of components
+ncomp <- tune.splsda.srbct$choice.ncomp$ncomp
+ncomp
+
+#Number of variables to keep in model
+select.keepX <- tune.splsda.srbct$choice.keepX[1:ncomp]
+select.keepX
+
+#Run sPLSDA on training set
+splsda.final_2derv <- mixOmics::splsda(train_x_2derv, train_y_2derv, ncomp = 3, keepX = select.keepX)
+plotIndiv(splsda.final_2derv, ind.names = FALSE, legend = TRUE,
+          ellipse = TRUE, title = "Training 2nd Derivative sPLS-DA")
+
+set.seed(30)
+perf.final_2derv <- perf(splsda.final_2derv, validation = "Mfold", folds = 5,
+                         dist = 'max.dist', nrepeat = 50,
+                         progressBar = FALSE)
+perf.final_2derv$error.rate
+perf.final_2derv$error.rate.class
+
+#Predicting the accuracy using the testing set 
+test.predict_2derv <- predict(splsda.final_2derv, test_x_2derv, method = "max.dist")
+Prediction_2derv <- test.predict_2derv$class$max.dist[,1]
+confusion.mat_2derv = get.confusion_matrix(truth = test_y_2derv, predicted = Prediction_2derv)
+get.BER(confusion.mat_2derv)
+
+#Get variables used for the model 
+#Shows loading values
+ind.match_2derv = match(selectVar(splsda.final_2derv, comp = 3)$name,
+                        names(perf.final_2derv$features$stable[[1]]))
+Freq = as.numeric(perf.final_2derv$features$stable[[1]][ind.match_2derv])
+data.frame(selectVar(splsda.final_2derv, comp = 3)$value, Freq)
+
+ind.match_2derv = match(selectVar(splsda.final_2derv, comp = 2)$name,
+                        names(perf.final_2derv$features$stable[[1]]))
+Freq = as.numeric(perf.final_2derv$features$stable[[1]][ind.match_2derv])
+data.frame(selectVar(splsda.final_2derv, comp = 2)$value, Freq)
+
+ind.match_2derv = match(selectVar(splsda.final_2derv, comp = 1)$name,
+                        names(perf.final_2derv$features$stable[[1]]))
+Freq = as.numeric(perf.final_2derv$features$stable[[1]][ind.match_2derv])
+data.frame(selectVar(splsda.final_2derv, comp = 1)$value, Freq)
+```
