@@ -1,3 +1,3 @@
-# Aggregated Data and Code for Coupling Near-Infrared Spectroscopy and Supervised Classification to Identify Fraser Fir Resistance to Balsam Woolly Adelgid 
+# Aggregated Data and Code for Fraser Fir and Machine Learning Article 
 Repository curated by William Parrott
 
