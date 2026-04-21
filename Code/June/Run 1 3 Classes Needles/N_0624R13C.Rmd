@@ -20,12 +20,12 @@ library(readr)
 library(readxl)
 
 #change to first file in spectra directory; col_names=FALSE if there are no column headers, default is 'TRUE'
-wavelength <- read_tsv("C:/Users/willi/Desktop/Master's Thesis Workbook/Summer 2024 Data_Wavelength/wavelengthref.txt", col_names=TRUE) 
+wavelength <- read_tsv("./wavelengthref.txt", col_names=TRUE) 
 #Wavelength vector using column 1
 #wavelength <- a[,1] -> not in use, wavelength above generates same vector
 
 #Import data table
-df <- read.csv("C:/Users/willi/Desktop/Master's Thesis Workbook/RerunsMay25/Data/June/NeedlesJune2024WL.csv")
+df <- read.csv("./Data/June/NeedlesJune2024WL.csv")
 
 #Plot all spectra 
 library(mdatools)
