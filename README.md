@@ -2,9 +2,9 @@
 Repository curated by William Parrott, data and code access for Frontiers in Plant Science.
 
 ## Project Overview
-Following methods from Conrad et al. 2020, supervised classification pipelines employing support vector machine (SVM) and random forest (RF) models were used to identify Fraser fir that were resistant to infestation by the balsam woolly adelgid using NIR spectra. Three measurements of reflectance at 257 bands in the NIR range were taken from a total of 99 trees with known resistance levels, then were averaged by tree ID to ensure independence in training-testing splits<sup>1</sup>. 33 trees showed no resistance, 32 showed medium resistance, and 34 showed high resistance. Resulting  spectra were transformed using a second derivative transformation, then were split into 70% training and 30% testing sets.
+Following methods from Conrad et al. 2020, supervised classification pipelines employing support vector machine (SVM) and random forest (RF) models were used to identify Fraser fir that were resistant to infestation by the balsam woolly adelgid using NIR spectra. Three measurements of reflectance at 257 bands in the NIR range were taken from a total of 99 trees with known resistance levels, then were averaged by tree ID to ensure independence in training-testing splits<sup>1</sup>. 33 trees showed no resistance, 32 showed medium resistance, and 34 showed high resistance. Resulting  spectra were transformed using a second derivative transformation, then were split into 70% training and 30% testing sets. SVM and RF were conducted on the full dataset and important variables for these classifications were identified; reflectance from important wavelengths was then used for a new training/testing split and subsequent RF and SVM models. A selection of every fifth wavelength was used to establish another training/testing split for an SVM. Finally, sparse partial least squares discriminant analysis was used to identify the loadings and stability of important wavelengths<sup>1</sup>.
 
-<sup>1</sup> This was not originally done and was corrected in later runs. 
+<sup>1</sup> This was not originally done and was added/corrected in later runs. 
 
 ## Repository Structure
 **1.** Archived: Data, code, and statistical analyses from the original runs that featured all spectra, unaveraged.  
