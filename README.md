@@ -7,12 +7,12 @@ Following methods from Conrad et al. 2020, supervised classification pipelines e
 <sup>1</sup> This was not originally done and was corrected in later runs. 
 
 ## Repository Structure
-**1.** Archived: Data, code, and statistical analyses from the original runs that featured all spectra, unaveraged.
-**2.** Data: .csv files containing the phloem and needle spectral datasets.
-**3.** Scripts: .Rmd files containing the supervised classification pipelines. Filepaths are relative (./filepath) for ease of access.
-**4.** README.md: The file containing this text.
-**5.** wavelengthref.txt: Reference file containing the 257 wavelengths that were measured to develop the spectra.
+**1.** Archived: Data, code, and statistical analyses from the original runs that featured all spectra, unaveraged.  
+**2.** Data: .csv files containing the phloem and needle spectral datasets.  
+**3.** Scripts: .Rmd files containing the supervised classification pipelines. Filepaths are relative (./filepath) for ease of access.  
+**4.** README.md: The file containing this text.  
+**5.** wavelengthref.txt: Reference file containing the 257 wavelengths that were measured to develop the spectra.  
 
 
-References:
+## References:
 Conrad, A. O., Li, W., Lee, D.-Y., Wang, G.-L., Rodriguez-Saona, L., and Bonello, P. (2020). Machine Learning-Based Presymptomatic Detection of Rice Sheath Blight Using Spectral Profiles. Plant Phenomics 2020, 8954085. doi: 10.34133/2020/8954085
