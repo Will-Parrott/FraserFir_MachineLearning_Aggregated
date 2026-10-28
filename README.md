@@ -16,13 +16,12 @@ Partial least squares discriminant analysis (PLS-DA) models were trained with co
 
 ## Repository Structure
 **1.** Archived: Data, code, and statistical analyses from the original runs that featured all spectra, unaveraged.  
-**2.** Data: .csv files containing the phloem and needle spectral datasets.  
-**3.** Scripts: .Rmd files containing the supervised classification pipelines. Filepaths are relative (./filepath) for ease of access.  
-**4.** Protein Analysis: files containing raw and processed protein data, as well as the R script for statistical analysis on proteins.  
-**5.** Field Validation Analysis: files containing data about field deployed models, including preprocessing values and performance.  
-**6.** References: file containing all references for this project.  
-**7.** README.md: The file containing this text.  
-**8.** wavelengthref.txt: Reference file containing the 257 wavelengths that were measured to develop the spectra.  
+**2.** Pilot Models: .csv files containing the phloem and needle spectral datasets. Also contains .Rmd files with the supervised classification pipelines. Filepaths are relative (./filepath) for ease of access.  
+**3.** Protein Analysis: files containing raw and processed protein data, as well as the R script for statistical analysis on proteins. Filepaths are relative (./filepath) for ease of access.  
+**4.** Field Validation Analysis: files containing data about field deployed models, including preprocessing values and performance.  
+**5.** README.md: The file containing this text.   
+**6.** References.txt: file containing all references for this project.  
+**7.** wavelengthref.txt: Reference file containing the 257 wavelengths that were measured to develop the spectra.  
 
 
 ## References (for the README):
