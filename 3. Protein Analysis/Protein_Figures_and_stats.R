@@ -5,9 +5,9 @@ library(tidyverse)
 library(qqplotr)
 library(patchwork)
 
-df <- read.csv("C:/Users/willi/Downloads/proteins_all.csv") 
+df <- read.csv("./proteins_all.csv") 
 
-df_avg <- read.csv("C:/Users/willi/Downloads/proteins_all.csv") %>% 
+df_avg <- read.csv("./proteins_all.csv") %>% 
   mutate(Sample.ID = substr(Sample.ID, 1, nchar(Sample.ID)-4)) %>% unique()
 
 
@@ -106,7 +106,7 @@ summary(all_aov)
 tukey_all <- TukeyHSD(all_aov)
 tukey_all
 
-#At Justin's recommendation, kruskall wallis and dunn post hoc
+#Kruskall wallis and dunn post hoc
 ## All together
 kruskal.test(PR_Conc ~ Res_Lev, data = joint_df)
 prc <- joint_df |> dunn_test(PR_Conc ~ Res_Lev, p.adjust.method = "bonferroni")
